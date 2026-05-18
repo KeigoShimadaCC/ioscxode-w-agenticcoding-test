@@ -9,8 +9,9 @@ SpaceInvadersLite is a tiny native iPhone learning app for Xcode project structu
 - Lets you tap to shoot upward bullets.
 - Spawns a grid of geometric aliens near the top.
 - Moves aliens side to side and steps them downward at screen edges.
+- Lets aliens fire simple downward bullets.
 - Destroys aliens when bullets hit them.
-- Tracks score, lives, game over, and restart.
+- Tracks score, high score, lives, pause, game over, and restart.
 
 ## Project structure
 - `project.yml`: XcodeGen project description. Regenerate the Xcode project with `xcodegen generate`.
@@ -18,7 +19,7 @@ SpaceInvadersLite is a tiny native iPhone learning app for Xcode project structu
 - `SpaceInvadersLite/SpaceInvadersLiteApp.swift`: SwiftUI `@main` entry point.
 - `SpaceInvadersLite/ContentView.swift`: embeds SpriteKit with `SpriteView` and overlays the HUD.
 - `SpaceInvadersLite/GameScene.swift`: SpriteKit scene with player, bullets, aliens, collision, lives, and restart logic.
-- `SpaceInvadersLite/GameHUD.swift`: SwiftUI score, lives, game-over, and restart UI.
+- `SpaceInvadersLite/GameHUD.swift`: SwiftUI score, high score, lives, pause, game-over, and restart UI.
 - `SpaceInvadersLite/GameConstants.swift`: game sizes, speeds, colors, scoring, and tuning values.
 - `SpaceInvadersLite/GameTypes.swift`: shared game state, phase enum, and node/category names.
 - `AGENT_WORKFLOW.md`: recommended terminal-agent plus Xcode workflow.
@@ -75,9 +76,6 @@ Use Xcode as the source of truth for build and runtime behavior. Paste exact fil
 
 ## Next learning extensions
 - Add sound effects.
-- Add alien bullets.
 - Add levels.
-- Add a pause button.
 - Add a simple menu.
-- Save high score with `UserDefaults`.
 - Add haptics.

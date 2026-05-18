@@ -6,12 +6,14 @@ final class GameScene: SKScene {
 
     private var player = SKShapeNode()
     private var bullets: [SKShapeNode] = []
+    private var alienBullets: [SKShapeNode] = []
     private var aliens: [SKShapeNode] = []
 
     private var alienDirection: CGFloat = 1
     private var alienSpeed = GameConstants.alienStartSpeed
     private var lastUpdateTime: TimeInterval = 0
     private var lastFireTime: TimeInterval = 0
+    private var lastAlienFireTime: TimeInterval = 0
 
     init(gameState: GameState) {
         self.gameState = gameState
@@ -42,8 +44,11 @@ final class GameScene: SKScene {
         lastUpdateTime = currentTime
 
         moveBullets(deltaTime: deltaTime)
+        moveAlienBullets(deltaTime: deltaTime)
         moveAliens(deltaTime: deltaTime)
+        fireAlienBulletIfReady(currentTime: currentTime)
         checkBulletAlienCollisions()
+        checkAlienBulletPlayerCollisions()
         checkAlienDangerZone()
     }
 
@@ -71,14 +76,25 @@ final class GameScene: SKScene {
         setupGame(resetScore: true)
     }
 
+    func togglePause() {
+        if gameState.phase == .playing {
+            gameState.phase = .paused
+        } else if gameState.phase == .paused {
+            gameState.phase = .playing
+            lastUpdateTime = 0
+        }
+    }
+
     private func setupGame(resetScore: Bool) {
         removeAllChildren()
         bullets.removeAll()
+        alienBullets.removeAll()
         aliens.removeAll()
         alienDirection = 1
         alienSpeed = resetScore ? GameConstants.alienStartSpeed : alienSpeed
         lastUpdateTime = 0
         lastFireTime = 0
+        lastAlienFireTime = 0
 
         if resetScore {
             gameState.reset()
@@ -90,10 +106,13 @@ final class GameScene: SKScene {
 
     private func resetWaveAfterLifeLoss() {
         bullets.forEach { $0.removeFromParent() }
+        alienBullets.forEach { $0.removeFromParent() }
         aliens.forEach { $0.removeFromParent() }
         bullets.removeAll()
+        alienBullets.removeAll()
         aliens.removeAll()
         alienDirection = 1
+        lastAlienFireTime = lastUpdateTime
         createAliens()
     }
 
@@ -152,6 +171,24 @@ final class GameScene: SKScene {
         addChild(bullet)
     }
 
+    private func fireAlienBulletIfReady(currentTime: TimeInterval) {
+        guard currentTime - lastAlienFireTime >= GameConstants.alienFireCooldown,
+              let shooter = aliens.randomElement()
+        else { return }
+
+        lastAlienFireTime = currentTime
+        let bullet = SKShapeNode(rectOf: GameConstants.alienBulletSize, cornerRadius: 2)
+        bullet.name = NodeName.alienBullet
+        bullet.fillColor = GameConstants.alienBulletColor
+        bullet.strokeColor = GameConstants.alienBulletColor
+        bullet.position = CGPoint(
+            x: shooter.position.x,
+            y: shooter.position.y - GameConstants.alienSize.height
+        )
+        alienBullets.append(bullet)
+        addChild(bullet)
+    }
+
     private func moveBullets(deltaTime: TimeInterval) {
         let distance = GameConstants.bulletSpeed * CGFloat(deltaTime)
         for bullet in bullets {
@@ -160,6 +197,21 @@ final class GameScene: SKScene {
 
         bullets.removeAll { bullet in
             if bullet.position.y > size.height + GameConstants.bulletSize.height {
+                bullet.removeFromParent()
+                return true
+            }
+            return false
+        }
+    }
+
+    private func moveAlienBullets(deltaTime: TimeInterval) {
+        let distance = GameConstants.alienBulletSpeed * CGFloat(deltaTime)
+        for bullet in alienBullets {
+            bullet.position.y -= distance
+        }
+
+        alienBullets.removeAll { bullet in
+            if bullet.position.y < -GameConstants.alienBulletSize.height {
                 bullet.removeFromParent()
                 return true
             }
@@ -215,6 +267,7 @@ final class GameScene: SKScene {
         bullets.removeAll { hitBullets.contains($0) }
         aliens.removeAll { hitAliens.contains($0) }
         gameState.score += hitAliens.count * GameConstants.scorePerAlien
+        gameState.updateHighScore()
 
         if aliens.isEmpty {
             alienSpeed += GameConstants.alienSpeedIncrease
@@ -222,15 +275,28 @@ final class GameScene: SKScene {
         }
     }
 
+    private func checkAlienBulletPlayerCollisions() {
+        guard let hitBullet = alienBullets.first(where: { $0.frame.intersects(player.frame) }) else { return }
+        hitBullet.removeFromParent()
+        alienBullets.removeAll { $0 == hitBullet }
+        loseLife()
+    }
+
     private func checkAlienDangerZone() {
         let dangerY = GameConstants.bottomDangerZone
         guard aliens.contains(where: { $0.frame.minY <= dangerY }) else { return }
+        loseLife()
+    }
 
+    private func loseLife() {
         gameState.lives -= 1
         if gameState.lives <= 0 {
             gameState.phase = .gameOver
             bullets.forEach { $0.removeFromParent() }
+            alienBullets.forEach { $0.removeFromParent() }
             bullets.removeAll()
+            alienBullets.removeAll()
+            gameState.updateHighScore()
         } else {
             resetWaveAfterLifeLoss()
         }

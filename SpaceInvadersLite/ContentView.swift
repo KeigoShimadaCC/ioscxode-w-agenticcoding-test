@@ -26,9 +26,11 @@ struct ContentView: View {
                         scene.size = newSize
                     }
 
-                GameHUD(gameState: gameState) {
-                    scene.restartGame()
-                }
+                GameHUD(
+                    gameState: gameState,
+                    onTogglePause: { scene.togglePause() },
+                    onRestart: { scene.restartGame() }
+                )
             }
             .background(Color.black)
         }

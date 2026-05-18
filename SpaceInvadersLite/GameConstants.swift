@@ -11,6 +11,10 @@ enum GameConstants {
     static let bulletSpeed: CGFloat = 520
     static let fireCooldown: TimeInterval = 0.28
 
+    static let alienBulletSize = CGSize(width: 6, height: 14)
+    static let alienBulletSpeed: CGFloat = 230
+    static let alienFireCooldown: TimeInterval = 1.15
+
     static let alienRows = 4
     static let alienColumns = 7
     static let alienSize = CGSize(width: 30, height: 22)
@@ -23,6 +27,7 @@ enum GameConstants {
 
     static let playerColor = SKColor.systemGreen
     static let bulletColor = SKColor.white
+    static let alienBulletColor = SKColor.systemPink
     static let alienColors: [SKColor] = [
         .systemRed,
         .systemPurple,

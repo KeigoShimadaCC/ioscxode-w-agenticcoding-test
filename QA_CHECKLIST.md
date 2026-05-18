@@ -10,9 +10,14 @@
 - [ ] Aliens appear
 - [ ] Aliens move left/right
 - [ ] Aliens step down at edges
+- [ ] Aliens shoot downward bullets
 - [ ] Bullet destroys alien
 - [ ] Score increases
+- [ ] High score appears and persists after restart
 - [ ] Lives decrease when aliens reach bottom
+- [ ] Lives decrease when alien bullets hit the player
+- [ ] Pause button freezes gameplay
+- [ ] Resume button continues gameplay
 - [ ] Game over appears at 0 lives
 - [ ] Restart works
 
