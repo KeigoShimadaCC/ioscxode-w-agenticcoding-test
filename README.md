@@ -8,18 +8,21 @@ SpaceInvadersLite is a tiny native iPhone learning app for Xcode project structu
 - Lets you drag horizontally to move the ship.
 - Lets you tap to shoot upward bullets.
 - Spawns a grid of geometric aliens near the top.
-- Moves aliens side to side and steps them downward at screen edges.
-- Lets aliens fire simple downward bullets.
-- Destroys aliens when bullets hit them.
-- Tracks score, high score, lives, pause, game over, and restart.
+- Moves adaptive aliens side to side, downward, and into special attack roles.
+- Drops alien fragments that automatically mutate the ship during a run.
+- Adds gravity wells that bend bullets and fragments through the playfield.
+- Lets you rewind recent action with limited charges, then spawns time echo hazards.
+- Adds colony pods that must be protected from alien fire and invaders.
+- Adds boss signals, rift storms, orbit drones, combo, and overdrive nova bursts.
+- Tracks score, high score, wave, colony integrity, lives, mutations, pause, game over, and restart.
 
 ## Project structure
 - `project.yml`: XcodeGen project description. Regenerate the Xcode project with `xcodegen generate`.
 - `SpaceInvadersLite.xcodeproj`: generated Xcode project opened by Xcode.
 - `SpaceInvadersLite/SpaceInvadersLiteApp.swift`: SwiftUI `@main` entry point.
 - `SpaceInvadersLite/ContentView.swift`: embeds SpriteKit with `SpriteView` and overlays the HUD.
-- `SpaceInvadersLite/GameScene.swift`: SpriteKit scene with player, bullets, aliens, collision, lives, and restart logic.
-- `SpaceInvadersLite/GameHUD.swift`: SwiftUI score, high score, lives, pause, game-over, and restart UI.
+- `SpaceInvadersLite/GameScene.swift`: SpriteKit scene with player, bullets, adaptive aliens, mutations, gravity wells, colony defense, rewind, collisions, lives, and restart logic.
+- `SpaceInvadersLite/GameHUD.swift`: SwiftUI score, high score, wave, colony, mutation, rewind, pause, game-over, and restart UI.
 - `SpaceInvadersLite/GameConstants.swift`: game sizes, speeds, colors, scoring, and tuning values.
 - `SpaceInvadersLite/GameTypes.swift`: shared game state, phase enum, and node/category names.
 - `AGENT_WORKFLOW.md`: recommended terminal-agent plus Xcode workflow.

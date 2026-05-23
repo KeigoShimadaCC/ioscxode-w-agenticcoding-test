@@ -29,6 +29,7 @@ struct ContentView: View {
                 GameHUD(
                     gameState: gameState,
                     onTogglePause: { scene.togglePause() },
+                    onRewind: { scene.rewindTime() },
                     onRestart: { scene.restartGame() }
                 )
             }

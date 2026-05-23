@@ -3,6 +3,7 @@ import SwiftUI
 struct GameHUD: View {
     @ObservedObject var gameState: GameState
     let onTogglePause: () -> Void
+    let onRewind: () -> Void
     let onRestart: () -> Void
 
     var body: some View {
@@ -13,12 +14,23 @@ struct GameHUD: View {
                     Text("Best \(gameState.highScore)")
                         .font(.caption.monospacedDigit())
                         .foregroundStyle(.white.opacity(0.75))
+                    Text("Wave \(gameState.wave)")
+                        .font(.caption.monospacedDigit())
+                        .foregroundStyle(.white.opacity(0.75))
                 }
                     .font(.headline.monospacedDigit())
 
                 Spacer()
 
                 if gameState.phase != .gameOver {
+                    Button("Rewind \(gameState.rewindCharges)") {
+                        onRewind()
+                    }
+                    .buttonStyle(.bordered)
+                    .controlSize(.small)
+                    .tint(.cyan)
+                    .disabled(gameState.phase != .playing || gameState.rewindCharges <= 0)
+
                     Button(gameState.phase == .paused ? "Resume" : "Pause") {
                         onTogglePause()
                     }
@@ -33,6 +45,34 @@ struct GameHUD: View {
             .foregroundStyle(.white)
             .padding(.horizontal, 16)
             .padding(.top, 12)
+
+            VStack(spacing: 4) {
+                HStack {
+                    Text("Colony \(gameState.colonyIntegrity)%")
+                    Spacer()
+                    Text("Combo \(gameState.combo)")
+                    Spacer()
+                    Text("Echoes \(gameState.timeEchoCount)")
+                }
+                .font(.caption.monospacedDigit())
+                .foregroundStyle(.white.opacity(0.82))
+
+                HStack {
+                    Text("Overdrive \(gameState.overdriveCharge)%")
+                    Spacer()
+                    Text(gameState.anomalyName)
+                }
+                .font(.caption2.monospaced())
+                .foregroundStyle(.orange.opacity(0.9))
+
+                Text(gameState.mutationSummary)
+                    .font(.caption2.monospaced())
+                    .foregroundStyle(.cyan.opacity(0.9))
+                    .lineLimit(2)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            .padding(.horizontal, 16)
+            .padding(.top, 6)
 
             Spacer()
 

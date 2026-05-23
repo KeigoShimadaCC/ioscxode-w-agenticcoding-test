@@ -12,6 +12,18 @@
 - [ ] Aliens step down at edges
 - [ ] Aliens shoot downward bullets
 - [ ] Bullet destroys alien
+- [ ] Destroyed aliens can drop fragments
+- [ ] Fragment pickup applies a visible mutation
+- [ ] Gravity wells bend bullets or fragments
+- [ ] Rewind button spends a charge and restores recent action
+- [ ] Rewind creates time echo hazards
+- [ ] Colony integrity decreases when pods are hit
+- [ ] New waves escalate after all aliens are defeated
+- [ ] Boss signal appears on higher waves
+- [ ] Rift storms spawn moving red hazards
+- [ ] Orbit drones appear and auto-fire after the mutation
+- [ ] Combo and overdrive values update after kills
+- [ ] Overdrive nova fires when charged
 - [ ] Score increases
 - [ ] High score appears and persists after restart
 - [ ] Lives decrease when aliens reach bottom
