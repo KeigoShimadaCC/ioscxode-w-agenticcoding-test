@@ -59,6 +59,15 @@ final class GameScene: SKScene {
         }
     }
 
+    private enum Layer {
+        static let backdrop: CGFloat = -20
+        static let atmosphere: CGFloat = -12
+        static let colony: CGFloat = 5
+        static let effects: CGFloat = 12
+        static let actors: CGFloat = 20
+        static let projectiles: CGFloat = 30
+    }
+
     private let gameState: GameState
 
     private var player = SKShapeNode()
@@ -198,6 +207,7 @@ final class GameScene: SKScene {
             gameState.reset()
         }
 
+        createBattlefieldBackdrop()
         createPlayer()
         createColonyPods()
         applyE2EFixtureIfNeeded()
@@ -241,18 +251,15 @@ final class GameScene: SKScene {
     }
 
     private func createPlayer() {
-        let path = CGMutablePath()
-        path.move(to: CGPoint(x: 0, y: GameConstants.playerSize.height / 2))
-        path.addLine(to: CGPoint(x: -GameConstants.playerSize.width / 2, y: -GameConstants.playerSize.height / 2))
-        path.addLine(to: CGPoint(x: GameConstants.playerSize.width / 2, y: -GameConstants.playerSize.height / 2))
-        path.closeSubpath()
-
-        player = SKShapeNode(path: path)
+        player = SKShapeNode(path: playerShipPath())
         player.name = NodeName.player
-        player.fillColor = GameConstants.playerColor
+        player.fillColor = SKColor(red: 0.04, green: 0.18, blue: 0.13, alpha: 0.96)
         player.strokeColor = GameConstants.playerColor
-        player.lineWidth = 1
+        player.lineWidth = 2
+        player.glowWidth = 4
+        player.zPosition = Layer.actors
         player.position = CGPoint(x: size.width / 2, y: GameConstants.playerBottomPadding)
+        addPlayerDetails(to: player)
         addChild(player)
         updatePlayerAppearance()
     }
@@ -265,10 +272,13 @@ final class GameScene: SKScene {
         for index in 0..<GameConstants.colonyPodCount {
             let pod = SKShapeNode(rectOf: GameConstants.colonyPodSize, cornerRadius: 5)
             pod.name = NodeName.colonyPod
-            pod.fillColor = GameConstants.colonyColor.withAlphaComponent(0.8)
+            pod.fillColor = SKColor(red: 0.02, green: 0.16, blue: 0.17, alpha: 0.9)
             pod.strokeColor = GameConstants.colonyColor
-            pod.lineWidth = 1.5
+            pod.lineWidth = 2
+            pod.glowWidth = 3
+            pod.zPosition = Layer.colony
             pod.position = CGPoint(x: startX + CGFloat(index) * 76, y: GameConstants.bottomDangerZone - 30)
+            addColonyDetails(to: pod, index: index)
             colonyPods.append(ColonyPod(node: pod, health: GameConstants.initialColonyIntegrity / GameConstants.colonyPodCount))
             addChild(pod)
         }
@@ -285,10 +295,13 @@ final class GameScene: SKScene {
             well.fillColor = GameConstants.gravityWellColor.withAlphaComponent(0.12)
             well.strokeColor = GameConstants.gravityWellColor.withAlphaComponent(0.72)
             well.lineWidth = 2
+            well.glowWidth = 9
+            well.zPosition = Layer.atmosphere
             well.position = CGPoint(
                 x: size.width * CGFloat(index + 1) / CGFloat(count + 1),
                 y: size.height * (0.45 + CGFloat(index % 2) * 0.16)
             )
+            addGravityWellDetails(to: well, index: index)
             addChild(well)
 
             let direction: CGFloat = index.isMultiple(of: 2) ? 1 : -1
@@ -334,15 +347,18 @@ final class GameScene: SKScene {
 
     private func makeAlien(role: EnemyRole, health: Int) -> SKShapeNode {
         let size = role == .boss ? GameConstants.bossSize : GameConstants.alienSize
-        let alien = SKShapeNode(rectOf: size, cornerRadius: role == .shield ? 9 : 5)
+        let alien = SKShapeNode(path: alienPath(for: role, size: size))
         alien.name = NodeName.alien
         alien.fillColor = color(for: role)
         alien.strokeColor = alien.fillColor
-        alien.lineWidth = role == .shield ? 3 : 1
+        alien.lineWidth = role == .shield ? 3 : 1.5
+        alien.glowWidth = role == .boss ? 7 : 3
+        alien.zPosition = Layer.actors
         alien.userData = [
             "role": role.rawValue,
             "health": health
         ]
+        addAlienDetails(to: alien, role: role, size: size)
         return alien
     }
 
@@ -391,6 +407,8 @@ final class GameScene: SKScene {
             gameState.anomalyName = "Overdrive Nova"
             fireOverdriveNova()
         }
+
+        spawnMuzzleFlash()
 
         if gameState.stackCount(for: .voidLance) > 0 {
             spawnBullet(
@@ -454,8 +472,11 @@ final class GameScene: SKScene {
         let size = name == NodeName.bullet ? GameConstants.bulletSize : GameConstants.alienBulletSize
         let bullet = SKShapeNode(rectOf: size, cornerRadius: 2)
         bullet.name = name
-        bullet.fillColor = color
+        bullet.fillColor = color.withAlphaComponent(name == NodeName.bullet ? 0.95 : 0.88)
         bullet.strokeColor = color
+        bullet.lineWidth = 1.2
+        bullet.glowWidth = name == NodeName.bullet ? 7 : 5
+        bullet.zPosition = Layer.projectiles
         bullet.position = position
         bullet.userData = [
             "dx": velocity.dx,
@@ -642,6 +663,7 @@ final class GameScene: SKScene {
             for alien in aliens where !defeatedAliens.contains(alien) {
                 guard bullet.frame.intersects(alien.frame) else { continue }
                 hitBullets.insert(bullet)
+                spawnHitSpark(at: bullet.position, color: bullet.strokeColor)
                 let remainingHealth = health(for: alien) - 1
                 if remainingHealth <= 0 {
                     defeatedAliens.append(alien)
@@ -660,6 +682,7 @@ final class GameScene: SKScene {
         }
 
         for alien in defeatedAliens {
+            spawnDefeatBurst(at: alien.position, color: alien.strokeColor, isBoss: role(for: alien) == .boss)
             spawnFragment(from: alien)
             alien.removeFromParent()
         }
@@ -703,6 +726,7 @@ final class GameScene: SKScene {
 
         for bullet in alienBullets {
             if bullet.frame.intersects(player.frame) {
+                spawnHitSpark(at: player.position, color: GameConstants.alienBulletColor)
                 bullet.removeFromParent()
                 alienBullets.removeAll { $0 == bullet }
                 loseLife()
@@ -712,6 +736,7 @@ final class GameScene: SKScene {
             if let podIndex = colonyPods.firstIndex(where: { bullet.frame.intersects($0.node.frame) }) {
                 removedBullets.insert(bullet)
                 damageColony(amount: GameConstants.colonyDamagePerHit, podIndex: podIndex)
+                spawnColonyHitEffect(at: colonyPods[podIndex].node.position)
             }
         }
 
@@ -742,6 +767,7 @@ final class GameScene: SKScene {
         guard !invadingAliens.isEmpty else { return }
 
         for alien in invadingAliens {
+            spawnColonyHitEffect(at: alien.position)
             alien.removeFromParent()
             damageColony(amount: GameConstants.alienContactColonyDamage, podIndex: nil)
         }
@@ -761,6 +787,7 @@ final class GameScene: SKScene {
 
         gameState.lives -= 1
         gameState.combo = 0
+        spawnLifeLossPulse()
         if isE2EMode {
             gameState.lives = max(1, gameState.lives)
             return
@@ -780,7 +807,7 @@ final class GameScene: SKScene {
 
         if let podIndex {
             colonyPods[podIndex].health = max(0, colonyPods[podIndex].health - amount)
-            colonyPods[podIndex].node.alpha = max(0.25, CGFloat(colonyPods[podIndex].health) / CGFloat(GameConstants.initialColonyIntegrity / GameConstants.colonyPodCount))
+            updateColonyPodVisual(at: podIndex)
         }
 
         if gameState.colonyIntegrity <= 0 {
@@ -810,6 +837,8 @@ final class GameScene: SKScene {
         fragment.fillColor = GameConstants.fragmentColor
         fragment.strokeColor = .white
         fragment.lineWidth = 1
+        fragment.glowWidth = 6
+        fragment.zPosition = Layer.effects
         fragment.position = alien.position
         fragment.userData = [
             "mutation": mutation.rawValue,
@@ -835,8 +864,11 @@ final class GameScene: SKScene {
             rift.fillColor = GameConstants.riftColor.withAlphaComponent(0.35)
             rift.strokeColor = GameConstants.riftColor
             rift.lineWidth = 2
+            rift.glowWidth = 10
+            rift.zPosition = Layer.effects
             let laneX = size.width * CGFloat(index + 1) / CGFloat(laneCount + 1)
             rift.position = CGPoint(x: laneX, y: size.height + CGFloat(index) * 48)
+            addRiftDetails(to: rift, index: index)
             rifts.append(rift)
             addChild(rift)
         }
@@ -859,6 +891,7 @@ final class GameScene: SKScene {
     }
 
     private func fireOverdriveNova() {
+        spawnOverdriveShockwave()
         for index in 0..<GameConstants.overdriveRadialShots {
             let angle = CGFloat(index) * (.pi * 2 / CGFloat(GameConstants.overdriveRadialShots))
             spawnBullet(
@@ -883,6 +916,10 @@ final class GameScene: SKScene {
             drone.name = NodeName.drone
             drone.fillColor = GameConstants.droneColor
             drone.strokeColor = .white
+            drone.lineWidth = 1.5
+            drone.glowWidth = 5
+            drone.zPosition = Layer.actors
+            addDroneDetails(to: drone)
             let angle = CGFloat(index) * .pi
             drone.position = CGPoint(
                 x: player.position.x + cos(angle) * GameConstants.droneOrbitRadius,
@@ -906,7 +943,10 @@ final class GameScene: SKScene {
             echo.fillColor = GameConstants.timeEchoColor.withAlphaComponent(0.32)
             echo.strokeColor = GameConstants.timeEchoColor
             echo.lineWidth = 1.5
+            echo.glowWidth = 8
+            echo.zPosition = Layer.effects
             echo.position = CGPoint(x: min(max(lane, 16), size.width - 16), y: size.height + 40)
+            addTimeEchoDetails(to: echo)
             timeEchoes.append(echo)
             addChild(echo)
         }
@@ -983,6 +1023,7 @@ final class GameScene: SKScene {
             guard snapshot.colonyPodSnapshots.indices.contains(index) else { continue }
             colonyPods[index].health = snapshot.colonyPodSnapshots[index].health
             colonyPods[index].node.alpha = snapshot.colonyPodSnapshots[index].alpha
+            updateColonyPodVisual(at: index)
         }
     }
 
@@ -1008,8 +1049,9 @@ final class GameScene: SKScene {
         let heavyStacks = gameState.stackCount(for: .heavyCore)
         player.xScale = 1 + CGFloat(heavyStacks) * 0.12
         player.yScale = 1 + CGFloat(gameState.stackCount(for: .shieldFins)) * 0.08
-        player.fillColor = heavyStacks > 0 ? .systemMint : GameConstants.playerColor
-        player.strokeColor = gameState.stackCount(for: .shieldFins) > 0 ? .white : player.fillColor
+        player.fillColor = heavyStacks > 0 ? SKColor.systemMint.withAlphaComponent(0.45) : SKColor(red: 0.04, green: 0.18, blue: 0.13, alpha: 0.96)
+        player.strokeColor = gameState.stackCount(for: .shieldFins) > 0 ? .white : GameConstants.playerColor
+        player.glowWidth = gameState.stackCount(for: .shieldFins) > 0 ? 8 : 4
     }
 
     private func applyE2EFixtureIfNeeded() {
@@ -1022,6 +1064,385 @@ final class GameScene: SKScene {
         gameState.overdriveCharge = 100
         gameState.anomalyName = "E2E Chaos"
         updatePlayerAppearance()
+    }
+
+    private func createBattlefieldBackdrop() {
+        backgroundColor = SKColor(red: 0.005, green: 0.007, blue: 0.03, alpha: 1)
+
+        let planet = SKShapeNode(circleOfRadius: max(size.width * 0.42, 120))
+        planet.fillColor = SKColor(red: 0.04, green: 0.08, blue: 0.16, alpha: 0.55)
+        planet.strokeColor = SKColor(red: 0.12, green: 0.55, blue: 0.72, alpha: 0.45)
+        planet.lineWidth = 2
+        planet.glowWidth = 12
+        planet.position = CGPoint(x: size.width * 0.18, y: size.height * 0.89)
+        planet.zPosition = Layer.backdrop
+        addChild(planet)
+
+        for layer in 0..<3 {
+            let count = 24 + layer * 14
+            for index in 0..<count {
+                let xSeed = CGFloat((index * 73 + layer * 41) % 997) / 997
+                let ySeed = CGFloat((index * 151 + layer * 67) % 983) / 983
+                let radius = CGFloat(layer + 1) * 0.55
+                let star = SKShapeNode(circleOfRadius: radius)
+                star.fillColor = SKColor.white.withAlphaComponent(0.35 + CGFloat(layer) * 0.16)
+                star.strokeColor = .clear
+                star.position = CGPoint(x: xSeed * size.width, y: ySeed * size.height)
+                star.zPosition = Layer.backdrop + CGFloat(layer)
+                let pulse = SKAction.sequence([
+                    .fadeAlpha(to: 0.25, duration: 1.6 + Double(layer) * 0.4),
+                    .fadeAlpha(to: 0.8, duration: 1.1 + Double(layer) * 0.3)
+                ])
+                star.run(.repeatForever(pulse))
+                addChild(star)
+            }
+        }
+
+        let horizon = SKShapeNode(rectOf: CGSize(width: size.width * 1.2, height: 42), cornerRadius: 18)
+        horizon.fillColor = SKColor(red: 0.02, green: 0.12, blue: 0.15, alpha: 0.42)
+        horizon.strokeColor = GameConstants.colonyColor.withAlphaComponent(0.45)
+        horizon.lineWidth = 1
+        horizon.glowWidth = 6
+        horizon.position = CGPoint(x: size.width / 2, y: GameConstants.bottomDangerZone - 54)
+        horizon.zPosition = Layer.backdrop + 5
+        addChild(horizon)
+
+        for index in 0..<7 {
+            let line = SKShapeNode(rectOf: CGSize(width: 1, height: size.height * 0.7), cornerRadius: 0)
+            line.fillColor = GameConstants.colonyColor.withAlphaComponent(0.09)
+            line.strokeColor = .clear
+            line.position = CGPoint(x: size.width * CGFloat(index) / 6, y: size.height * 0.38)
+            line.zPosition = Layer.backdrop + 4
+            addChild(line)
+        }
+    }
+
+    private func playerShipPath() -> CGPath {
+        let w = GameConstants.playerSize.width / 2
+        let h = GameConstants.playerSize.height / 2
+        let path = CGMutablePath()
+        path.move(to: CGPoint(x: 0, y: h))
+        path.addLine(to: CGPoint(x: -w * 0.34, y: h * 0.04))
+        path.addLine(to: CGPoint(x: -w, y: -h * 0.44))
+        path.addLine(to: CGPoint(x: -w * 0.42, y: -h))
+        path.addLine(to: CGPoint(x: 0, y: -h * 0.62))
+        path.addLine(to: CGPoint(x: w * 0.42, y: -h))
+        path.addLine(to: CGPoint(x: w, y: -h * 0.44))
+        path.addLine(to: CGPoint(x: w * 0.34, y: h * 0.04))
+        path.closeSubpath()
+        return path
+    }
+
+    private func addPlayerDetails(to ship: SKShapeNode) {
+        let cockpit = SKShapeNode(ellipseOf: CGSize(width: 11, height: 15))
+        cockpit.fillColor = SKColor(red: 0.72, green: 1, blue: 0.92, alpha: 0.72)
+        cockpit.strokeColor = .white.withAlphaComponent(0.72)
+        cockpit.lineWidth = 1
+        cockpit.glowWidth = 3
+        cockpit.position = CGPoint(x: 0, y: 2)
+        cockpit.zPosition = 2
+        ship.addChild(cockpit)
+
+        let core = SKShapeNode(rectOf: CGSize(width: 8, height: 5), cornerRadius: 2)
+        core.fillColor = GameConstants.playerColor.withAlphaComponent(0.9)
+        core.strokeColor = .clear
+        core.position = CGPoint(x: 0, y: -6)
+        core.zPosition = 2
+        ship.addChild(core)
+
+        for x in [-13, 13] as [CGFloat] {
+            let thruster = SKShapeNode(ellipseOf: CGSize(width: 7, height: 5))
+            thruster.fillColor = SKColor.systemOrange.withAlphaComponent(0.85)
+            thruster.strokeColor = .clear
+            thruster.glowWidth = 4
+            thruster.position = CGPoint(x: x, y: -7)
+            thruster.zPosition = -1
+            ship.addChild(thruster)
+        }
+    }
+
+    private func addColonyDetails(to pod: SKShapeNode, index: Int) {
+        let core = SKShapeNode(ellipseOf: CGSize(width: 16, height: 8))
+        core.name = "colonyCore"
+        core.fillColor = GameConstants.colonyColor.withAlphaComponent(0.85)
+        core.strokeColor = .white.withAlphaComponent(0.45)
+        core.lineWidth = 1
+        core.glowWidth = 4
+        core.zPosition = 2
+        pod.addChild(core)
+
+        for x in [-13, 13] as [CGFloat] {
+            let brace = SKShapeNode(rectOf: CGSize(width: 4, height: 10), cornerRadius: 2)
+            brace.fillColor = SKColor.white.withAlphaComponent(0.35)
+            brace.strokeColor = .clear
+            brace.position = CGPoint(x: x, y: 0)
+            brace.zPosition = 2
+            pod.addChild(brace)
+        }
+
+        let arcPath = CGMutablePath()
+        arcPath.addArc(
+            center: .zero,
+            radius: 28,
+            startAngle: .pi * 0.16,
+            endAngle: .pi * 0.84,
+            clockwise: false
+        )
+        let shieldArc = SKShapeNode(path: arcPath)
+        shieldArc.name = "shieldArc"
+        shieldArc.strokeColor = GameConstants.colonyColor.withAlphaComponent(0.32)
+        shieldArc.lineWidth = 2
+        shieldArc.glowWidth = 5
+        shieldArc.position = CGPoint(x: 0, y: 2 + CGFloat(index % 2) * 2)
+        shieldArc.zPosition = 1
+        pod.addChild(shieldArc)
+    }
+
+    private func updateColonyPodVisual(at index: Int) {
+        let maxHealth = CGFloat(GameConstants.initialColonyIntegrity / GameConstants.colonyPodCount)
+        let healthRatio = max(0.25, CGFloat(colonyPods[index].health) / maxHealth)
+        let pod = colonyPods[index].node
+        pod.alpha = healthRatio
+        pod.strokeColor = healthRatio < 0.45 ? SKColor.systemOrange : GameConstants.colonyColor
+        pod.glowWidth = healthRatio < 0.45 ? 7 : 3
+        pod.childNode(withName: "shieldArc")?.alpha = healthRatio
+        pod.childNode(withName: "colonyCore")?.run(.sequence([.scale(to: 1.22, duration: 0.06), .scale(to: 1, duration: 0.12)]))
+    }
+
+    private func addGravityWellDetails(to well: SKShapeNode, index: Int) {
+        for ring in 0..<3 {
+            let radius = GameConstants.gravityWellRadius * (0.44 + CGFloat(ring) * 0.24)
+            let path = CGMutablePath()
+            path.addEllipse(in: CGRect(x: -radius, y: -radius * 0.5, width: radius * 2, height: radius))
+            let ellipse = SKShapeNode(path: path)
+            ellipse.strokeColor = GameConstants.gravityWellColor.withAlphaComponent(0.26 + CGFloat(ring) * 0.12)
+            ellipse.fillColor = .clear
+            ellipse.lineWidth = 1.4
+            ellipse.glowWidth = 4
+            ellipse.zRotation = CGFloat(ring) * .pi / 3
+            ellipse.zPosition = 2
+            let direction: CGFloat = (ring + index).isMultiple(of: 2) ? 1 : -1
+            ellipse.run(.repeatForever(.rotate(byAngle: direction * .pi * 2, duration: 5.0 + Double(ring))))
+            well.addChild(ellipse)
+        }
+    }
+
+    private func alienPath(for role: EnemyRole, size: CGSize) -> CGPath {
+        let w = size.width / 2
+        let h = size.height / 2
+        let path = CGMutablePath()
+
+        switch role {
+        case .boss:
+            path.move(to: CGPoint(x: -w, y: h * 0.25))
+            path.addLine(to: CGPoint(x: -w * 0.74, y: h))
+            path.addLine(to: CGPoint(x: w * 0.74, y: h))
+            path.addLine(to: CGPoint(x: w, y: h * 0.25))
+            path.addLine(to: CGPoint(x: w * 0.72, y: -h))
+            path.addLine(to: CGPoint(x: -w * 0.72, y: -h))
+        case .shield:
+            path.addRoundedRect(in: CGRect(x: -w, y: -h, width: size.width, height: size.height), cornerWidth: 9, cornerHeight: 9)
+        case .sniper:
+            path.move(to: CGPoint(x: 0, y: h))
+            path.addLine(to: CGPoint(x: -w, y: -h * 0.16))
+            path.addLine(to: CGPoint(x: -w * 0.28, y: -h))
+            path.addLine(to: CGPoint(x: w * 0.28, y: -h))
+            path.addLine(to: CGPoint(x: w, y: -h * 0.16))
+        case .flanker:
+            path.move(to: CGPoint(x: -w, y: h * 0.22))
+            path.addLine(to: CGPoint(x: -w * 0.42, y: h))
+            path.addLine(to: CGPoint(x: w, y: h * 0.32))
+            path.addLine(to: CGPoint(x: w * 0.46, y: -h))
+            path.addLine(to: CGPoint(x: -w * 0.7, y: -h * 0.72))
+        case .diver:
+            path.move(to: CGPoint(x: 0, y: -h))
+            path.addLine(to: CGPoint(x: -w, y: h * 0.46))
+            path.addLine(to: CGPoint(x: -w * 0.28, y: h))
+            path.addLine(to: CGPoint(x: w * 0.28, y: h))
+            path.addLine(to: CGPoint(x: w, y: h * 0.46))
+        case .grunt:
+            path.move(to: CGPoint(x: -w, y: h * 0.25))
+            path.addQuadCurve(to: CGPoint(x: -w * 0.45, y: h), control: CGPoint(x: -w * 0.88, y: h))
+            path.addLine(to: CGPoint(x: w * 0.45, y: h))
+            path.addQuadCurve(to: CGPoint(x: w, y: h * 0.25), control: CGPoint(x: w * 0.88, y: h))
+            path.addLine(to: CGPoint(x: w * 0.68, y: -h))
+            path.addLine(to: CGPoint(x: -w * 0.68, y: -h))
+        }
+
+        path.closeSubpath()
+        return path
+    }
+
+    private func addAlienDetails(to alien: SKShapeNode, role: EnemyRole, size: CGSize) {
+        let accent = SKShapeNode(rectOf: CGSize(width: size.width * 0.45, height: max(4, size.height * 0.18)), cornerRadius: 2)
+        accent.fillColor = SKColor.white.withAlphaComponent(role == .shield ? 0.28 : 0.18)
+        accent.strokeColor = .clear
+        accent.position = CGPoint(x: 0, y: size.height * 0.1)
+        accent.zPosition = 2
+        alien.addChild(accent)
+
+        let eyeWidth = role == .boss ? size.width * 0.5 : size.width * 0.32
+        let eye = SKShapeNode(rectOf: CGSize(width: eyeWidth, height: 4), cornerRadius: 2)
+        eye.fillColor = SKColor.white.withAlphaComponent(0.75)
+        eye.strokeColor = .clear
+        eye.glowWidth = 3
+        eye.position = CGPoint(x: 0, y: -size.height * 0.12)
+        eye.zPosition = 3
+        alien.addChild(eye)
+
+        if role == .shield || role == .boss {
+            let armor = SKShapeNode(rectOf: CGSize(width: size.width * 0.82, height: size.height * 0.76), cornerRadius: role == .boss ? 5 : 8)
+            armor.fillColor = .clear
+            armor.strokeColor = SKColor.white.withAlphaComponent(0.38)
+            armor.lineWidth = 1.4
+            armor.zPosition = 4
+            alien.addChild(armor)
+        }
+
+        if role == .sniper {
+            let sight = SKShapeNode(circleOfRadius: 4)
+            sight.fillColor = GameConstants.alienBulletColor.withAlphaComponent(0.85)
+            sight.strokeColor = .white.withAlphaComponent(0.45)
+            sight.glowWidth = 4
+            sight.zPosition = 4
+            alien.addChild(sight)
+        }
+    }
+
+    private func addRiftDetails(to rift: SKShapeNode, index: Int) {
+        for lineIndex in 0..<4 {
+            let offset = CGFloat(lineIndex - 2) * 4
+            let tear = CGMutablePath()
+            tear.move(to: CGPoint(x: offset, y: -GameConstants.riftSize.height * 0.38))
+            tear.addCurve(
+                to: CGPoint(x: -offset, y: GameConstants.riftSize.height * 0.38),
+                control1: CGPoint(x: offset + 8, y: -16),
+                control2: CGPoint(x: -offset - 8, y: 16)
+            )
+            let line = SKShapeNode(path: tear)
+            line.strokeColor = SKColor.white.withAlphaComponent(0.24 + CGFloat(lineIndex) * 0.08)
+            line.lineWidth = 1.2
+            line.glowWidth = 4
+            line.zPosition = 2
+            rift.addChild(line)
+        }
+        let wobble = SKAction.sequence([
+            .scaleX(to: 1.22, duration: 0.16),
+            .scaleX(to: 0.88, duration: 0.13),
+            .scaleX(to: 1, duration: 0.18)
+        ])
+        rift.run(.repeatForever(.sequence([.wait(forDuration: 0.18 * Double(index + 1)), wobble])))
+    }
+
+    private func addDroneDetails(to drone: SKShapeNode) {
+        let ring = SKShapeNode(circleOfRadius: GameConstants.droneRadius + 4)
+        ring.fillColor = .clear
+        ring.strokeColor = GameConstants.droneColor.withAlphaComponent(0.42)
+        ring.lineWidth = 1
+        ring.glowWidth = 3
+        ring.zPosition = -1
+        ring.run(.repeatForever(.rotate(byAngle: .pi * 2, duration: 1.4)))
+        drone.addChild(ring)
+    }
+
+    private func addTimeEchoDetails(to echo: SKShapeNode) {
+        for offset in [-4, 4] as [CGFloat] {
+            let line = SKShapeNode(rectOf: CGSize(width: 2, height: 54), cornerRadius: 1)
+            line.fillColor = SKColor.white.withAlphaComponent(0.25)
+            line.strokeColor = .clear
+            line.position = CGPoint(x: offset, y: 0)
+            echo.addChild(line)
+        }
+        echo.run(.repeatForever(.sequence([.fadeAlpha(to: 0.42, duration: 0.18), .fadeAlpha(to: 0.92, duration: 0.24)])))
+    }
+
+    private func spawnMuzzleFlash() {
+        let flash = SKShapeNode(circleOfRadius: 8)
+        flash.fillColor = GameConstants.playerColor.withAlphaComponent(0.72)
+        flash.strokeColor = .white.withAlphaComponent(0.8)
+        flash.glowWidth = 8
+        flash.position = CGPoint(x: player.position.x, y: player.position.y + GameConstants.playerSize.height)
+        flash.zPosition = Layer.effects
+        addChild(flash)
+        flash.run(.sequence([
+            .group([.scale(to: 2.1, duration: 0.08), .fadeOut(withDuration: 0.08)]),
+            .removeFromParent()
+        ]))
+    }
+
+    private func spawnHitSpark(at position: CGPoint, color: SKColor) {
+        for index in 0..<6 {
+            let spark = SKShapeNode(rectOf: CGSize(width: 3, height: 10), cornerRadius: 1.5)
+            spark.fillColor = color.withAlphaComponent(0.86)
+            spark.strokeColor = .clear
+            spark.glowWidth = 4
+            spark.position = position
+            spark.zRotation = CGFloat(index) * (.pi * 2 / 6)
+            spark.zPosition = Layer.effects
+            addChild(spark)
+            let dx = cos(spark.zRotation) * CGFloat.random(in: 10...24)
+            let dy = sin(spark.zRotation) * CGFloat.random(in: 10...24)
+            spark.run(.sequence([
+                .group([.moveBy(x: dx, y: dy, duration: 0.18), .fadeOut(withDuration: 0.18)]),
+                .removeFromParent()
+            ]))
+        }
+    }
+
+    private func spawnDefeatBurst(at position: CGPoint, color: SKColor, isBoss: Bool) {
+        let ring = SKShapeNode(circleOfRadius: isBoss ? 24 : 12)
+        ring.fillColor = .clear
+        ring.strokeColor = color.withAlphaComponent(0.8)
+        ring.lineWidth = isBoss ? 3 : 2
+        ring.glowWidth = isBoss ? 12 : 7
+        ring.position = position
+        ring.zPosition = Layer.effects
+        addChild(ring)
+        ring.run(.sequence([
+            .group([.scale(to: isBoss ? 2.8 : 2.1, duration: 0.22), .fadeOut(withDuration: 0.22)]),
+            .removeFromParent()
+        ]))
+        spawnHitSpark(at: position, color: color)
+    }
+
+    private func spawnColonyHitEffect(at position: CGPoint) {
+        let warning = SKShapeNode(circleOfRadius: 16)
+        warning.fillColor = SKColor.systemOrange.withAlphaComponent(0.22)
+        warning.strokeColor = SKColor.systemOrange
+        warning.lineWidth = 2
+        warning.glowWidth = 9
+        warning.position = position
+        warning.zPosition = Layer.effects
+        addChild(warning)
+        warning.run(.sequence([
+            .group([.scale(to: 2.5, duration: 0.2), .fadeOut(withDuration: 0.2)]),
+            .removeFromParent()
+        ]))
+    }
+
+    private func spawnLifeLossPulse() {
+        let pulse = SKShapeNode(rectOf: CGSize(width: size.width * 1.2, height: size.height * 1.2), cornerRadius: 0)
+        pulse.fillColor = SKColor.systemRed.withAlphaComponent(0.16)
+        pulse.strokeColor = .clear
+        pulse.position = CGPoint(x: size.width / 2, y: size.height / 2)
+        pulse.zPosition = Layer.effects + 20
+        addChild(pulse)
+        pulse.run(.sequence([.fadeOut(withDuration: 0.18), .removeFromParent()]))
+    }
+
+    private func spawnOverdriveShockwave() {
+        let wave = SKShapeNode(circleOfRadius: 18)
+        wave.fillColor = .clear
+        wave.strokeColor = SKColor.systemOrange
+        wave.lineWidth = 4
+        wave.glowWidth = 14
+        wave.position = player.position
+        wave.zPosition = Layer.effects
+        addChild(wave)
+        wave.run(.sequence([
+            .group([.scale(to: 9, duration: 0.36), .fadeOut(withDuration: 0.36)]),
+            .removeFromParent()
+        ]))
     }
 
     private func gravityAdjustedVelocity(for position: CGPoint, velocity: CGVector, deltaTime: CGFloat) -> CGVector {
