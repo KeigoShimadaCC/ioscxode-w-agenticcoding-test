@@ -66,9 +66,10 @@ struct GameHUD: View {
                 .foregroundStyle(.orange.opacity(0.9))
 
                 Text(gameState.mutationSummary)
-                    .font(.caption2.monospaced())
+                    .font(.system(size: 12, weight: .medium, design: .monospaced))
                     .foregroundStyle(.cyan.opacity(0.9))
-                    .lineLimit(2)
+                    .lineLimit(3)
+                    .minimumScaleFactor(0.72)
                     .frame(maxWidth: .infinity, alignment: .leading)
             }
             .padding(.horizontal, 16)
