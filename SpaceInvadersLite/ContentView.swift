@@ -30,7 +30,8 @@ struct ContentView: View {
                     gameState: gameState,
                     onTogglePause: { scene.togglePause() },
                     onRewind: { scene.rewindTime() },
-                    onRestart: { scene.restartGame() }
+                    onRestart: { scene.restartGame() },
+                    onToggleDebugAI: { scene.toggleDebugAI() }
                 )
             }
             .background(Color.black)

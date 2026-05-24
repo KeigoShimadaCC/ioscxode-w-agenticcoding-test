@@ -72,6 +72,9 @@ final class GameState: ObservableObject {
     @Published var combo: Int = 0
     @Published var overdriveCharge: Int = 0
     @Published var anomalyName: String = "Stable"
+    @Published var debugAIAvailable: Bool = false
+    @Published var debugAIEnabled: Bool = false
+    @Published var debugAIStatus: String = "Bot Idle"
 
     init() {
         highScore = UserDefaults.standard.integer(forKey: highScoreKey)
@@ -90,6 +93,7 @@ final class GameState: ObservableObject {
         combo = 0
         overdriveCharge = 0
         anomalyName = "Stable"
+        debugAIStatus = debugAIEnabled ? "Bot Ready" : "Bot Idle"
     }
 
     func updateHighScore() {

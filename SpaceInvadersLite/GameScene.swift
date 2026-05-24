@@ -68,6 +68,14 @@ final class GameScene: SKScene {
         static let projectiles: CGFloat = 30
     }
 
+    private enum DebugBotMode: String {
+        case idle = "Bot Idle"
+        case aim = "Bot Aim"
+        case dodge = "Bot Dodge"
+        case recover = "Bot Recover"
+        case rewind = "Bot Rewind"
+    }
+
     private let gameState: GameState
 
     private var player = SKShapeNode()
@@ -84,6 +92,8 @@ final class GameScene: SKScene {
     private var behaviorStats = PlayerBehaviorStats()
 
     private let isE2EMode = ProcessInfo.processInfo.environment["SPACE_INVADERS_E2E"] == "1"
+    private let isDebugAIAvailable = ProcessInfo.processInfo.environment["SPACE_INVADERS_DEBUG_AI"] == "1"
+    private var isDebugAIEnabled = ProcessInfo.processInfo.environment["SPACE_INVADERS_AUTOPLAY"] == "1"
     private var alienDirection: CGFloat = 1
     private var alienSpeed = GameConstants.alienStartSpeed
     private var lastUpdateTime: TimeInterval = 0
@@ -93,11 +103,16 @@ final class GameScene: SKScene {
     private var lastDroneFireTime: TimeInterval = 0
     private var lastRiftSpawnTime: TimeInterval = 0
     private var droneAngle: CGFloat = 0
+    private var debugBotMode: DebugBotMode = .idle
+    private var debugBotLastFireAttempt: TimeInterval = 0
 
     init(gameState: GameState) {
         self.gameState = gameState
         super.init(size: UIScreen.main.bounds.size)
         scaleMode = .resizeFill
+        gameState.debugAIAvailable = isDebugAIAvailable
+        gameState.debugAIEnabled = isDebugAIAvailable && isDebugAIEnabled
+        gameState.debugAIStatus = gameState.debugAIEnabled ? DebugBotMode.aim.rawValue : DebugBotMode.idle.rawValue
     }
 
     required init?(coder: NSCoder) {
@@ -130,6 +145,7 @@ final class GameScene: SKScene {
         moveAliens(deltaTime: deltaTime)
         spawnRiftIfReady(currentTime: currentTime)
         fireAlienBulletIfReady(currentTime: currentTime)
+        updateDebugAI(deltaTime: deltaTime, currentTime: currentTime)
         checkBulletAlienCollisions()
         checkFragmentPickups()
         checkAlienBulletImpacts()
@@ -165,6 +181,13 @@ final class GameScene: SKScene {
             gameState.phase = .playing
             lastUpdateTime = 0
         }
+    }
+
+    func toggleDebugAI() {
+        guard isDebugAIAvailable else { return }
+        isDebugAIEnabled.toggle()
+        gameState.debugAIEnabled = isDebugAIEnabled
+        setDebugBotMode(isDebugAIEnabled ? .aim : .idle)
     }
 
     func rewindTime() {
@@ -206,6 +229,10 @@ final class GameScene: SKScene {
         if resetScore {
             gameState.reset()
         }
+        isDebugAIEnabled = isDebugAIAvailable && isDebugAIEnabled
+        gameState.debugAIAvailable = isDebugAIAvailable
+        gameState.debugAIEnabled = isDebugAIEnabled
+        setDebugBotMode(isDebugAIEnabled ? .aim : .idle)
 
         createBattlefieldBackdrop()
         createPlayer()
@@ -1443,6 +1470,181 @@ final class GameScene: SKScene {
             .group([.scale(to: 9, duration: 0.36), .fadeOut(withDuration: 0.36)]),
             .removeFromParent()
         ]))
+    }
+
+    private func updateDebugAI(deltaTime: TimeInterval, currentTime: TimeInterval) {
+        guard isDebugAIAvailable, isDebugAIEnabled, gameState.phase == .playing, player.parent != nil else {
+            if isDebugAIAvailable && !isDebugAIEnabled {
+                setDebugBotMode(.idle)
+            }
+            return
+        }
+
+        if debugBotShouldRewind() {
+            setDebugBotMode(.rewind)
+            rewindTime()
+            return
+        }
+
+        let targetX = debugBotTargetX()
+        let safeX = debugBotSafeX(preferredX: targetX)
+        let distance = safeX - player.position.x
+        let maxStep = CGFloat(deltaTime) * 430
+
+        if abs(distance) > 1 {
+            player.position.x = clampedPlayerX(player.position.x + min(max(distance, -maxStep), maxStep))
+        }
+
+        let mode: DebugBotMode
+        if debugBotImmediateThreatScore(at: player.position.x) > 0 {
+            mode = .dodge
+        } else if aliens.isEmpty {
+            mode = .recover
+        } else {
+            mode = .aim
+        }
+        setDebugBotMode(mode)
+
+        guard currentTime - debugBotLastFireAttempt >= 0.08 else { return }
+        debugBotLastFireAttempt = currentTime
+        if debugBotShouldFire(at: targetX) {
+            fireBulletIfReady()
+        }
+    }
+
+    private func setDebugBotMode(_ mode: DebugBotMode) {
+        guard debugBotMode != mode || gameState.debugAIStatus != mode.rawValue else { return }
+        debugBotMode = mode
+        gameState.debugAIStatus = mode.rawValue
+    }
+
+    private func debugBotTargetX() -> CGFloat {
+        if let fragment = fragments
+            .filter({ $0.position.y > player.position.y + 22 })
+            .min(by: { hypot($0.position.x - player.position.x, $0.position.y - player.position.y) < hypot($1.position.x - player.position.x, $1.position.y - player.position.y) }) {
+            return clampedPlayerX(fragment.position.x)
+        }
+
+        let rankedAliens = aliens.sorted { left, right in
+            let leftRole = role(for: left)
+            let rightRole = role(for: right)
+            let leftScore = left.position.y - debugBotRolePriority(leftRole)
+            let rightScore = right.position.y - debugBotRolePriority(rightRole)
+            return leftScore < rightScore
+        }
+
+        return clampedPlayerX(rankedAliens.first?.position.x ?? player.position.x)
+    }
+
+    private func debugBotRolePriority(_ role: EnemyRole) -> CGFloat {
+        switch role {
+        case .boss:
+            return 42
+        case .sniper, .diver:
+            return 24
+        case .flanker:
+            return 18
+        case .shield:
+            return 8
+        case .grunt:
+            return 0
+        }
+    }
+
+    private func debugBotSafeX(preferredX: CGFloat) -> CGFloat {
+        let minX = clampedPlayerX(0)
+        let maxX = clampedPlayerX(size.width)
+        var candidates: [CGFloat] = [preferredX, player.position.x, size.width * 0.5]
+
+        let laneCount = 10
+        for lane in 0...laneCount {
+            let t = CGFloat(lane) / CGFloat(laneCount)
+            candidates.append(minX + (maxX - minX) * t)
+        }
+
+        return candidates
+            .map(clampedPlayerX)
+            .min { left, right in
+                debugBotSafetyScore(at: left, preferredX: preferredX) < debugBotSafetyScore(at: right, preferredX: preferredX)
+            } ?? clampedPlayerX(preferredX)
+    }
+
+    private func debugBotSafetyScore(at x: CGFloat, preferredX: CGFloat) -> CGFloat {
+        var score = abs(x - preferredX) * 0.7 + abs(x - player.position.x) * 0.18
+        score += debugBotImmediateThreatScore(at: x) * 1_000
+
+        for bullet in alienBullets {
+            let velocity = velocity(for: bullet)
+            guard velocity.dy < 0 else { continue }
+            let verticalDistance = bullet.position.y - player.position.y
+            guard verticalDistance > -18, verticalDistance < 280 else { continue }
+            let horizontalDistance = abs(bullet.position.x - x)
+            let lanePenalty = max(0, 52 - horizontalDistance)
+            score += lanePenalty * (verticalDistance < 110 ? 16 : 7)
+        }
+
+        for rift in rifts {
+            let verticalDistance = rift.position.y - player.position.y
+            guard verticalDistance > -35, verticalDistance < 380 else { continue }
+            let horizontalDistance = abs(rift.position.x - x)
+            score += max(0, 70 - horizontalDistance) * 13
+        }
+
+        for echo in timeEchoes {
+            let verticalDistance = echo.position.y - player.position.y
+            guard verticalDistance > -35, verticalDistance < 320 else { continue }
+            let horizontalDistance = abs(echo.position.x - x)
+            score += max(0, 46 - horizontalDistance) * 10
+        }
+
+        for well in gravityWells {
+            guard well.node.position.y < size.height * 0.62 else { continue }
+            let distance = hypot(well.node.position.x - x, well.node.position.y - player.position.y)
+            score += max(0, well.radius * 0.9 - distance) * 4
+        }
+
+        return score
+    }
+
+    private func debugBotImmediateThreatScore(at x: CGFloat) -> CGFloat {
+        var threat: CGFloat = 0
+
+        for bullet in alienBullets {
+            let velocity = velocity(for: bullet)
+            guard velocity.dy < 0 else { continue }
+            let verticalDistance = bullet.position.y - player.position.y
+            if verticalDistance > -8, verticalDistance < 72, abs(bullet.position.x - x) < 34 {
+                threat += 1
+            }
+        }
+
+        for rift in rifts where abs(rift.position.x - x) < 46 && abs(rift.position.y - player.position.y) < 94 {
+            threat += 1
+        }
+
+        for echo in timeEchoes where abs(echo.position.x - x) < 34 && abs(echo.position.y - player.position.y) < 86 {
+            threat += 1
+        }
+
+        return threat
+    }
+
+    private func debugBotShouldRewind() -> Bool {
+        guard gameState.rewindCharges > 0, rewindTargetSnapshot() != nil else { return false }
+        return debugBotImmediateThreatScore(at: player.position.x) >= 2
+    }
+
+    private func debugBotShouldFire(at targetX: CGFloat) -> Bool {
+        guard abs(player.position.x - targetX) < 24 else { return false }
+        guard debugBotImmediateThreatScore(at: player.position.x) == 0 else { return false }
+
+        if gameState.overdriveCharge >= 100 {
+            return true
+        }
+
+        return aliens.contains { alien in
+            alien.position.y > player.position.y + 40 && abs(alien.position.x - player.position.x) < 28
+        }
     }
 
     private func gravityAdjustedVelocity(for position: CGPoint, velocity: CGVector, deltaTime: CGFloat) -> CGVector {

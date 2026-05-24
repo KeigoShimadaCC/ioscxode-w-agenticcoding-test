@@ -5,6 +5,7 @@ struct GameHUD: View {
     let onTogglePause: () -> Void
     let onRewind: () -> Void
     let onRestart: () -> Void
+    let onToggleDebugAI: () -> Void
 
     var body: some View {
         VStack(spacing: 0) {
@@ -71,6 +72,24 @@ struct GameHUD: View {
                     .lineLimit(3)
                     .minimumScaleFactor(0.72)
                     .frame(maxWidth: .infinity, alignment: .leading)
+
+                if gameState.debugAIAvailable {
+                    HStack(spacing: 8) {
+                        Button(gameState.debugAIEnabled ? "Bot On" : "Bot Off") {
+                            onToggleDebugAI()
+                        }
+                        .buttonStyle(.bordered)
+                        .controlSize(.mini)
+                        .tint(gameState.debugAIEnabled ? .mint : .gray)
+
+                        Text(gameState.debugAIStatus)
+                            .font(.system(size: 11, weight: .medium, design: .monospaced))
+                            .foregroundStyle(.mint.opacity(gameState.debugAIEnabled ? 0.92 : 0.55))
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.75)
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                }
             }
             .padding(.horizontal, 16)
             .padding(.top, 6)

@@ -50,6 +50,11 @@ Terminal build command:
 xcodebuild -project SpaceInvadersLite.xcodeproj -scheme SpaceInvadersLite -destination 'platform=iOS Simulator,name=iPhone 13 mini' build
 ```
 
+## Debug autoplayer
+For simulator debugging, launch with `SPACE_INVADERS_DEBUG_AI=1` to show a Bot toggle in the HUD. Add `SPACE_INVADERS_AUTOPLAY=1` to start the run with the bot already enabled.
+
+The bot is a traditional game AI: it moves the ship, fires, dodges bullets/rifts/time echoes, collects fragments, and uses rewind when a collision looks imminent. Normal launches do not show or run it.
+
 ## How to run on physical iPhone 13 mini
 1. Connect the iPhone by USB, or use wireless debugging if it is already configured.
 2. In Xcode, select the physical iPhone from the toolbar device selector.
